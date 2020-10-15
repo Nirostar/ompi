@@ -38,6 +38,7 @@
 #include "ompi/mca/coll/base/coll_base_functions.h"
 #include "coll_base_topo.h"
 #include "coll_base_util.h"
+#include "ompi/runtime/ompi_spc.h"
 
 /*
  * ompi_coll_base_allreduce_intra_nonoverlapping
@@ -58,6 +59,8 @@ ompi_coll_base_allreduce_intra_nonoverlapping(const void *sbuf, void *rbuf, int 
                                                mca_coll_base_module_t *module)
 {
     int err, rank;
+
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_NONOVERLAPPING, 1);
 
     rank = ompi_comm_rank(comm);
 
@@ -139,6 +142,8 @@ ompi_coll_base_allreduce_intra_recursivedoubling(const void *sbuf, void *rbuf,
     char *tmpsend = NULL, *tmprecv = NULL, *tmpswap = NULL, *inplacebuf_free = NULL, *inplacebuf;
     ptrdiff_t span, gap = 0;
 
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING, 1);
+
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
 
@@ -216,14 +221,17 @@ ompi_coll_base_allreduce_intra_recursivedoubling(const void *sbuf, void *rbuf,
             (newremote * 2 + 1):(newremote + extra_ranks);
 
         /* Exchange the data */
+        double start_time = MPI_Wtime();
         ret = ompi_coll_base_sendrecv_actual(tmpsend, count, dtype, remote,
                                              MCA_COLL_BASE_TAG_ALLREDUCE,
                                              tmprecv, count, dtype, remote,
                                              MCA_COLL_BASE_TAG_ALLREDUCE,
                                              comm, MPI_STATUS_IGNORE);
         if (MPI_SUCCESS != ret) { line = __LINE__; goto error_hndl; }
+        SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING_DATA_EXCHANGE_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
 
         /* Apply operation */
+        start_time = MPI_Wtime();
         if (rank < remote) {
             /* tmprecv = tmpsend (op) tmprecv */
             ompi_op_reduce(op, tmpsend, tmprecv, count, dtype);
@@ -234,6 +242,7 @@ ompi_coll_base_allreduce_intra_recursivedoubling(const void *sbuf, void *rbuf,
             /* tmpsend = tmprecv (op) tmpsend */
             ompi_op_reduce(op, tmprecv, tmpsend, count, dtype);
         }
+        SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING_OPERATION_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
     }
 
     /* Handle non-power-of-two case:
@@ -351,6 +360,8 @@ ompi_coll_base_allreduce_intra_ring(const void *sbuf, void *rbuf, int count,
     ptrdiff_t true_lb, true_extent, lb, extent;
     ptrdiff_t block_offset, max_real_segsize;
     ompi_request_t *reqs[2] = {NULL, NULL};
+
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_RING, 1);
 
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
@@ -630,6 +641,8 @@ ompi_coll_base_allreduce_intra_ring_segmented(const void *sbuf, void *rbuf, int 
     ompi_request_t *reqs[2] = {NULL, NULL};
     ptrdiff_t lb, extent, gap;
 
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_RING_SEGMENTED, 1);
+
     size = ompi_comm_size(comm);
     rank = ompi_comm_rank(comm);
 
@@ -884,6 +897,8 @@ ompi_coll_base_allreduce_intra_basic_linear(const void *sbuf, void *rbuf, int co
 {
     int err, rank;
 
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_BASIC_LINEAR, 1);
+
     rank = ompi_comm_rank(comm);
 
     OPAL_OUTPUT((ompi_coll_base_framework.framework_output,"coll:base:allreduce_intra_basic_linear rank %d", rank));
@@ -971,6 +986,8 @@ int ompi_coll_base_allreduce_intra_redscat_allgather(
     mca_coll_base_module_t *module)
 {
     int *rindex = NULL, *rcount = NULL, *sindex = NULL, *scount = NULL;
+
+    SPC_RECORD(OMPI_SPC_BASE_ALLREDUCE_INTRA_REDSCAT_ALLGATHER, 1);
 
     int comm_size = ompi_comm_size(comm);
     int rank = ompi_comm_rank(comm);

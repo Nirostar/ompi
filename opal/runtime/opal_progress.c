@@ -37,6 +37,8 @@
 #include "opal/util/output.h"
 #include "opal/runtime/opal_params.h"
 
+// #include "ompi/runtime/ompi_spc.h"
+
 #define OPAL_PROGRESS_USE_TIMERS (OPAL_TIMER_CYCLE_SUPPORTED || OPAL_TIMER_USEC_SUPPORTED)
 #define OPAL_PROGRESS_ONLY_USEC_NATIVE (OPAL_TIMER_USEC_NATIVE && !OPAL_TIMER_CYCLE_NATIVE)
 
@@ -222,6 +224,7 @@ static int opal_progress_events(void)
 void
 opal_progress(void)
 {
+    //SPC_RECORD(OMPI_SPC_OPAL_PROGRESS, 1);
     static uint32_t num_calls = 0;
     size_t i;
     int events = 0;
@@ -237,7 +240,7 @@ opal_progress(void)
      * number of calls may be inaccurate, but since it will eventually be incremented,
      * it's not a problem.
      */
-    if (((num_calls++) & 0x7) == 0) {
+    if (((num_calls++) & 0x3) == 0) {
         for (i = 0 ; i < callbacks_lp_len ; ++i) {
             events += (callbacks_lp[i])();
         }

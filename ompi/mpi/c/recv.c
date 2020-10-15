@@ -45,6 +45,7 @@ int MPI_Recv(void *buf, int count, MPI_Datatype type, int source,
     int rc = MPI_SUCCESS;
 
     SPC_RECORD(OMPI_SPC_RECV, 1);
+    double start_time = MPI_Wtime();
 
     MEMCHECKER(
         memchecker_datatype(type);
@@ -80,5 +81,8 @@ int MPI_Recv(void *buf, int count, MPI_Datatype type, int source,
     OPAL_CR_ENTER_LIBRARY();
 
     rc = MCA_PML_CALL(recv(buf, count, type, source, tag, comm, status));
+
+    SPC_RECORD(OMPI_SPC_RECV_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
+
     OMPI_ERRHANDLER_RETURN(rc, comm, rc, FUNC_NAME);
 }

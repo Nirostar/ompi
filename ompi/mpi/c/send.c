@@ -48,6 +48,7 @@ int MPI_Send(const void *buf, int count, MPI_Datatype type, int dest,
     int rc = MPI_SUCCESS;
 
     SPC_RECORD(OMPI_SPC_SEND, 1);
+    double start_time = MPI_Wtime();
 
     MEMCHECKER(
         memchecker_datatype(type);
@@ -79,5 +80,7 @@ int MPI_Send(const void *buf, int count, MPI_Datatype type, int dest,
 
     OPAL_CR_ENTER_LIBRARY();
     rc = MCA_PML_CALL(send(buf, count, type, dest, tag, MCA_PML_BASE_SEND_STANDARD, comm));
+    SPC_RECORD(OMPI_SPC_SEND_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
+
     OMPI_ERRHANDLER_RETURN(rc, comm, rc, FUNC_NAME);
 }

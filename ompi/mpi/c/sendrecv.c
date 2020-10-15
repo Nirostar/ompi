@@ -50,6 +50,7 @@ int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
     int rc = MPI_SUCCESS;
 
     SPC_RECORD(OMPI_SPC_SENDRECV, 1);
+    double start_time = MPI_Wtime();
 
     MEMCHECKER(
         memchecker_datatype(sendtype);
@@ -101,5 +102,7 @@ int MPI_Sendrecv(const void *sendbuf, int sendcount, MPI_Datatype sendtype,
         }
         rc = MPI_SUCCESS;
     }
+    SPC_RECORD(OMPI_SPC_SENDRECV_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
+
     OMPI_ERRHANDLER_RETURN(rc, comm, rc, FUNC_NAME);
 }

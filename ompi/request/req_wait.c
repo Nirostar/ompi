@@ -32,16 +32,23 @@
 #include "ompi/request/grequest.h"
 
 #include "ompi/mca/crcp/crcp.h"
+#include "ompi/runtime/ompi_spc.h"
 
 int ompi_request_default_wait(
     ompi_request_t ** req_ptr,
     ompi_status_public_t * status)
 {
     ompi_request_t *req = *req_ptr;
+        SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT, 1);
 
+
+    double start_time = MPI_Wtime();
     ompi_request_wait_completion(req);
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_REQUEST_WAIT_COMPLETION_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
 
+    start_time = MPI_Wtime();
     OMPI_CRCP_REQUEST_COMPLETE(req);
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_CRCP_REQUEST_COMPLETE, (int) ((MPI_Wtime() - start_time) * 1e9));
 
     /* return status.  If it's a generalized request, we *have* to
        invoke the query_fn, even if the user procided STATUS_IGNORE.
@@ -73,6 +80,7 @@ int ompi_request_default_wait(
     if (MPI_SUCCESS != req->req_status.MPI_ERROR) {
         return req->req_status.MPI_ERROR;
     }
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_AFTERMATH, (int) ((MPI_Wtime() - start_time) * 1e9));
 
     /* If there's an error while freeing the request, assume that the
        request is still there.  Otherwise, Bad Things will happen
@@ -90,6 +98,8 @@ int ompi_request_default_wait_any(size_t count,
     int rc = OMPI_SUCCESS;
     ompi_request_t *request=NULL;
     ompi_wait_sync_t sync;
+
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_ANY, 1);
 
     if (OPAL_UNLIKELY(0 == count)) {
         *index = MPI_UNDEFINED;
@@ -207,6 +217,8 @@ int ompi_request_default_wait_all( size_t count,
     ompi_request_t *request;
     int mpi_error = OMPI_SUCCESS;
     ompi_wait_sync_t sync;
+
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_ALL, 1);
 
     if (OPAL_UNLIKELY(0 == count)) {
         return OMPI_SUCCESS;
@@ -394,6 +406,8 @@ int ompi_request_default_wait_some(size_t count,
     ompi_request_t *request = NULL;
     ompi_wait_sync_t sync;
     size_t sync_sets = 0, sync_unsets = 0;
+
+    SPC_RECORD(OMPI_SPC_REQUEST_DEFAULT_WAIT_SOME, 1);
 
     if (OPAL_UNLIKELY(0 == count)) {
         *outcount = MPI_UNDEFINED;

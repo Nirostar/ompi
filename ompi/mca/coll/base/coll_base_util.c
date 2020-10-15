@@ -29,6 +29,7 @@
 #include "ompi/mca/topo/base/base.h"
 #include "ompi/mca/pml/pml.h"
 #include "coll_base_util.h"
+#include "ompi/runtime/ompi_spc.h"
 
 int ompi_coll_base_sendrecv_actual( const void* sendbuf, size_t scount,
                                     ompi_datatype_t* sdatatype,
@@ -46,19 +47,25 @@ int ompi_coll_base_sendrecv_actual( const void* sendbuf, size_t scount,
     ompi_status_public_t rstatus;
 
     /* post new irecv */
+    double start_time = MPI_Wtime();
     ompi_datatype_type_size(rdatatype, &rtypesize);
     err = MCA_PML_CALL(irecv( recvbuf, rcount, rdatatype, source, rtag,
                               comm, &req));
     if (err != MPI_SUCCESS) { line = __LINE__; goto error_handler; }
+    SPC_RECORD(OMPI_SPC_SENDRECV_POST_IRECV_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
 
     /* send data to children */
+    start_time = MPI_Wtime();
     ompi_datatype_type_size(sdatatype, &stypesize);
     err = MCA_PML_CALL(send( sendbuf, scount, sdatatype, dest, stag,
                              MCA_PML_BASE_SEND_STANDARD, comm));
     if (err != MPI_SUCCESS) { line = __LINE__; goto error_handler; }
+    SPC_RECORD(OMPI_SPC_SENDRECV_SEND_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
 
+    start_time = MPI_Wtime();
     err = ompi_request_wait( &req, &rstatus);
     if (err != MPI_SUCCESS) { line = __LINE__; goto error_handler; }
+    SPC_RECORD(OMPI_SPC_SENDRECV_REQUEST_WAIT_TIME, (int) ((MPI_Wtime() - start_time) * 1e9));
 
     if (MPI_STATUS_IGNORE != status) {
         *status = rstatus;

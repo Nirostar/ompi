@@ -19,11 +19,8 @@
 
 opal_timer_t sys_clock_freq_mhz = 0;
 
-static void ompi_spc_dump(void);
-
 /* Array for converting from SPC indices to MPI_T indices */
 static bool mpi_t_enabled = false;
-static ompi_communicator_t *ompi_spc_comm = NULL;
 
 typedef struct ompi_spc_event_t {
     const char* counter_name;
@@ -65,6 +62,32 @@ static ompi_spc_event_t ompi_spc_events_names[OMPI_SPC_NUM_COUNTERS] = {
     SET_COUNTER_ARRAY(OMPI_SPC_REDUCE_SCATTER_INIT, "The number of times MPIX_Reduce_scatter_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_REDUCE_SCATTER_BLOCK_INIT, "The number of times MPIX_Reduce_scatter_block_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE, "The number of times MPI_Allreduce was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASIC_ALLREDUCE_INTRA, "The number of times MPI_Allreduce used the basic intra algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASIC_ALLREDUCE_INTER, "The number of times MPI_Allreduce used the basic inter algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_NONOVERLAPPING, "The number of times MPI_Allreduce used the INTRA_NONOVERLAPPING algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING, "The number of times MPI_Allreduce used the INTRA_RECURSIVEDOUBLING algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_RING, "The number of times MPI_Allreduce used the INTRA_RING algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_RING_SEGMENTED, "The number of times MPI_Allreduce used the INTRA_RING_SEGMENTED algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_BASIC_LINEAR, "The number of times MPI_Allreduce used the INTRA_BASIC_LINEAR algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_REDSCAT_ALLGATHER, "The number of times MPI_Allreduce used the REDSCAT_ALLGATHER algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_SEND_TIME, "The time in nanoseconds spent while sending."),
+    SET_COUNTER_ARRAY(OMPI_SPC_SENDRECV_TIME, "The time in nanoseconds spent while sending."),
+    SET_COUNTER_ARRAY(OMPI_SPC_RECV_TIME, "The time in nanoseconds spent while sending."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING_DATA_EXCHANGE_TIME, "The time in nanoseconds spent for data exchange in the INTRA_RECURSIVEDOUBLING algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_BASE_ALLREDUCE_INTRA_RECURSIVEDOUBLING_OPERATION_TIME, "The time in nanoseconds spent for applying the operation in the INTRA_RECURSIVEDOUBLING algorithm."),
+    SET_COUNTER_ARRAY(OMPI_SPC_SENDRECV_POST_IRECV_TIME, "The time in nanoseconds spent in sendrecv to post the IRECV."),
+    SET_COUNTER_ARRAY(OMPI_SPC_SENDRECV_SEND_TIME, "The time in nanoseconds spent spent in sendrecv to SEND."),
+    SET_COUNTER_ARRAY(OMPI_SPC_SENDRECV_REQUEST_WAIT_TIME, "The time in nanoseconds spent sendrecv waiting for the request."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT, "The number of times ompi_request_default_wait was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_ANY, "The number of times ompi_request_default_wait_any was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_ALL, "The number of times ompi_request_default_wait_all was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_SOME, "The number of times ompi_request_default_wait_some was called."),
+    SET_COUNTER_ARRAY(OMPI_SPC_OPAL_PROGRESS, "The number of times opal_progress was called in ompi_request_wait_completion."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_WAIT_COMPLETION_THREADS, "The number of times the threads branch was executed in ompi_request_wait_completion"),
+    SET_COUNTER_ARRAY(OMPI_SPC_OPAL_PROGRESS_TIME, "The time spent in opal_progress in ompi_request_wait_completion."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_REQUEST_WAIT_COMPLETION_TIME, "The time spent in ompi_request_wait_completion in ompi_request_default_wait."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_CRCP_REQUEST_COMPLETE, "The time spent in OMPI_CRCP_REQUEST_COMPLETE in ompi_request_default_wait."),
+    SET_COUNTER_ARRAY(OMPI_SPC_REQUEST_DEFAULT_WAIT_AFTERMATH, "The time spent in the aftermath of ompi_request_default_wait."),
     SET_COUNTER_ARRAY(OMPI_SPC_IALLREDUCE, "The number of times MPI_Iallreduce was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_ALLREDUCE_INIT, "The number of times MPIX_Allreduce_init was called."),
     SET_COUNTER_ARRAY(OMPI_SPC_SCAN, "The number of times MPI_Scan was called."),
@@ -266,7 +289,6 @@ void ompi_spc_events_init(void)
         ompi_spc_events[i].value = 0;
     }
 
-    ompi_comm_dup(&ompi_mpi_comm_world.comm, &ompi_spc_comm);
 }
 
 /* Initializes the SPC data structures and registers all counters as MPI_T pvars.
@@ -334,83 +356,11 @@ void ompi_spc_init(void)
     opal_argv_free(arg_strings);
 }
 
-/* Gathers all of the SPC data onto rank 0 of MPI_COMM_WORLD and prints out all
- * of the counter values to stdout.
- */
-static void ompi_spc_dump(void)
-{
-    int i, j, world_size, offset;
-    long long *recv_buffer = NULL, *send_buffer;
-
-    int rank = ompi_comm_rank(ompi_spc_comm);
-    world_size = ompi_comm_size(ompi_spc_comm);
-
-    /* Convert from cycles to usecs before sending */
-    for(i = 0; i < OMPI_SPC_NUM_COUNTERS; i++) {
-        if( IS_SPC_BIT_SET(ompi_spc_timer_event, i) ) {
-            SPC_CYCLES_TO_USECS(&ompi_spc_events[i].value);
-        }
-    }
-
-    /* Aggregate all of the information on rank 0 using MPI_Gather on MPI_COMM_WORLD */
-    send_buffer = (long long*)malloc(OMPI_SPC_NUM_COUNTERS * sizeof(long long));
-    if (NULL == send_buffer) {
-        opal_show_help("help-mpi-runtime.txt", "lib-call-fail", true,
-                       "malloc", __FILE__, __LINE__);
-        return;
-    }
-    for(i = 0; i < OMPI_SPC_NUM_COUNTERS; i++) {
-        send_buffer[i] = (long long)ompi_spc_events[i].value;
-    }
-    if( 0 == rank ) {
-        recv_buffer = (long long*)malloc(world_size * OMPI_SPC_NUM_COUNTERS * sizeof(long long));
-        if (NULL == recv_buffer) {
-            opal_show_help("help-mpi-runtime.txt", "lib-call-fail", true,
-                           "malloc", __FILE__, __LINE__);
-            return;
-        }
-    }
-    (void)ompi_spc_comm->c_coll->coll_gather(send_buffer, OMPI_SPC_NUM_COUNTERS, MPI_LONG_LONG,
-                                    recv_buffer, OMPI_SPC_NUM_COUNTERS, MPI_LONG_LONG,
-                                    0, ompi_spc_comm,
-                                    ompi_spc_comm->c_coll->coll_gather_module);
-
-    /* Once rank 0 has all of the information, print the aggregated counter values for each rank in order */
-    if(rank == 0) {
-        opal_output(0, "Open MPI Software-based Performance Counters:\n");
-        offset = 0; /* Offset into the recv_buffer for each rank */
-        for(j = 0; j < world_size; j++) {
-            opal_output(0, "MPI_COMM_WORLD Rank %d:\n", j);
-            for(i = 0; i < OMPI_SPC_NUM_COUNTERS; i++) {
-                /* If this is a timer-based counter, we need to covert from cycles to usecs */
-                if( 0 == recv_buffer[offset+i] ) {
-                    continue;
-                }
-                opal_output(0, "%s -> %lld\n", ompi_spc_events[i].name, recv_buffer[offset+i]);
-            }
-            opal_output(0, "\n");
-            offset += OMPI_SPC_NUM_COUNTERS;
-        }
-        printf("###########################################################################\n");
-        printf("NOTE: Any counters not shown here were either disabled or had a value of 0.\n");
-        printf("###########################################################################\n");
-
-        free(recv_buffer);
-    }
-    free(send_buffer);
-
-    ompi_spc_comm->c_coll->coll_barrier(ompi_spc_comm, ompi_spc_comm->c_coll->coll_barrier_module);
-}
 
 /* Frees any dynamically alocated OMPI SPC data structures */
 void ompi_spc_fini(void)
 {
-    if (SPC_ENABLE == 1 && ompi_mpi_spc_dump_enabled) {
-        ompi_spc_dump();
-    }
-
     free(ompi_spc_events); ompi_spc_events = NULL;
-    ompi_comm_free(&ompi_spc_comm);
 }
 
 /* Records an update to a counter using an atomic add operation. */

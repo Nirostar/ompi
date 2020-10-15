@@ -31,6 +31,7 @@
 #include "ompi/mca/coll/base/coll_base_util.h"
 #include "coll_basic.h"
 #include "ompi/mca/pml/pml.h"
+#include "ompi/runtime/ompi_spc.h"
 
 
 /*
@@ -49,8 +50,8 @@ mca_coll_basic_allreduce_intra(const void *sbuf, void *rbuf, int count,
 {
     int err;
 
+    SPC_RECORD(OMPI_SPC_BASIC_ALLREDUCE_INTRA, 1);
     /* Reduce to 0 and broadcast. */
-
     if (MPI_IN_PLACE == sbuf) {
         if (0 == ompi_comm_rank(comm)) {
             err = comm->c_coll->coll_reduce(MPI_IN_PLACE, rbuf, count, dtype, op, 0, comm, comm->c_coll->coll_reduce_module);
@@ -64,7 +65,10 @@ mca_coll_basic_allreduce_intra(const void *sbuf, void *rbuf, int count,
         return err;
     }
 
-    return comm->c_coll->coll_bcast(rbuf, count, dtype, 0, comm, comm->c_coll->coll_bcast_module);
+    //start_time = MPI_Wtime();
+    err = comm->c_coll->coll_bcast(rbuf, count, dtype, 0, comm, comm->c_coll->coll_bcast_module);
+    //SPC_RECORD("OMPI_SPC_allreduce_bcast_time", (int) ((MPI_Wtime() - start_time) * 1e6));
+    return err;
 }
 
 
@@ -86,6 +90,8 @@ mca_coll_basic_allreduce_inter(const void *sbuf, void *rbuf, int count,
     ptrdiff_t extent, dsize, gap;
     char *tmpbuf = NULL, *pml_buffer = NULL;
     ompi_request_t **reqs = NULL;
+
+    SPC_RECORD(OMPI_SPC_BASIC_ALLREDUCE_INTER, 1);
 
     rank = ompi_comm_rank(comm);
     rsize = ompi_comm_remote_size(comm);
