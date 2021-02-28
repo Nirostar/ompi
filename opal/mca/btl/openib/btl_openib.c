@@ -73,6 +73,9 @@
 #include <fcntl.h>
 #include <string.h>
 #include <math.h>
+
+#include <roth_tracing/roth_tracing.h>
+
 #ifdef HAVE_SYS_TYPES_H
 #include <sys/types.h>
 #endif
@@ -1895,6 +1898,8 @@ int mca_btl_openib_send(
     mca_btl_base_tag_t tag)
 
 {
+    roth_tracing_increment_counter(MCA_BTL_OPENIB_SEND_COUNT);
+    roth_tracing_start_timer(MCA_BTL_OPENIB_SEND_TIME);
     mca_btl_openib_send_frag_t *frag;
 
     assert(openib_frag_type(des) == MCA_BTL_OPENIB_FRAG_SEND ||
@@ -1921,8 +1926,9 @@ int mca_btl_openib_send(
     }
 
     des->des_flags |= MCA_BTL_DES_SEND_ALWAYS_CALLBACK;
-
-    return mca_btl_openib_endpoint_send(ep, frag);
+    int retval = mca_btl_openib_endpoint_send(ep, frag);
+    roth_tracing_stop_timer(MCA_BTL_OPENIB_SEND_TIME);
+    return retval;
 }
 
 static mca_btl_base_registration_handle_t *mca_btl_openib_register_mem (mca_btl_base_module_t *btl,

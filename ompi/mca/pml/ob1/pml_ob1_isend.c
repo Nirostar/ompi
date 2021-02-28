@@ -30,6 +30,8 @@
 #include "ompi/peruse/peruse-internal.h"
 #include "ompi/runtime/ompi_spc.h"
 
+#include <roth_tracing/roth_tracing.h>
+
 /**
  * Single usage request. As we allow recursive calls (as an
  * example from the request completion callback), we cannot rely
@@ -208,6 +210,8 @@ int mca_pml_ob1_send(const void *buf,
                      mca_pml_base_send_mode_t sendmode,
                      ompi_communicator_t * comm)
 {
+    roth_tracing_increment_counter(MCA_PML_OB1_SEND_COUNT);
+    roth_tracing_start_timer(MCA_PML_OB1_SEND_TIME);
     mca_pml_ob1_comm_proc_t *ob1_proc = mca_pml_ob1_peer_lookup (comm, dst);
     ompi_proc_t *dst_proc = ob1_proc->ompi_proc;
     mca_bml_base_endpoint_t* endpoint = mca_bml_base_get_endpoint (dst_proc);
@@ -288,6 +292,7 @@ int mca_pml_ob1_send(const void *buf,
         mca_pml_ob1_send_request_fini (sendreq);
         mca_pml_ob1_sendreq = sendreq;
     }
+    roth_tracing_stop_timer(MCA_PML_OB1_SEND_TIME);
 
     return rc;
 }

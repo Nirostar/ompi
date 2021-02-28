@@ -22,6 +22,8 @@
 #include "opal/mca/common/ucx/common_ucx.h"
 #include "pml_ucx_request.h"
 
+#include <roth_tracing/roth_tracing.h>
+
 #include <inttypes.h>
 
 
@@ -907,6 +909,8 @@ int mca_pml_ucx_send(const void *buf, size_t count, ompi_datatype_t *datatype, i
                      int tag, mca_pml_base_send_mode_t mode,
                      struct ompi_communicator_t* comm)
 {
+    roth_tracing_increment_counter(MCA_PML_UCX_SEND_COUNT);
+    roth_tracing_start_timer(MCA_PML_UCX_SEND_TIME);
     ucp_ep_h ep;
 
     PML_UCX_TRACE_SEND("%s", buf, count, datatype, dst, tag, mode, comm,
@@ -920,15 +924,18 @@ int mca_pml_ucx_send(const void *buf, size_t count, ompi_datatype_t *datatype, i
 #if HAVE_DECL_UCP_TAG_SEND_NBR
     if (OPAL_LIKELY((MCA_PML_BASE_SEND_BUFFERED != mode) &&
                     (MCA_PML_BASE_SEND_SYNCHRONOUS != mode))) {
-        return mca_pml_ucx_send_nbr(ep, buf, count, datatype,
+        int retval = mca_pml_ucx_send_nbr(ep, buf, count, datatype,
                                     PML_UCX_MAKE_SEND_TAG(tag, comm));
+        roth_tracing_stop_timer(MCA_PML_UCX_SEND_TIME);
+        return retval;
     }
 #endif
-
-    return mca_pml_ucx_send_nb(ep, buf, count, datatype,
-                               mca_pml_ucx_get_datatype(datatype),
-                               PML_UCX_MAKE_SEND_TAG(tag, comm), mode,
-                               mca_pml_ucx_send_completion);
+    int retval = mca_pml_ucx_send_nb(ep, buf, count, datatype,
+                                      mca_pml_ucx_get_datatype(datatype),
+                                      PML_UCX_MAKE_SEND_TAG(tag, comm), mode,
+                                      mca_pml_ucx_send_completion);
+    roth_tracing_stop_timer(MCA_PML_UCX_SEND_TIME);
+    return retval;
 }
 
 int mca_pml_ucx_iprobe(int src, int tag, struct ompi_communicator_t* comm,

@@ -36,6 +36,8 @@
 #include "mtl_psm2_endpoint.h"
 #include "mtl_psm2_request.h"
 
+#include <roth_tracing/roth_tracing.h>
+
 mca_mtl_psm2_module_t ompi_mtl_psm2 = {
     .super = {
         /* NTH: PSM2 supports 16 bit context ids */
@@ -404,19 +406,28 @@ int ompi_mtl_psm2_progress( void ) {
     psm2_mq_status2_t psm2_status;
     psm2_mq_req_t req;
     int completed = 0;
+    roth_tracing_start_timer(OMPI_MTL_PSM2_PROGRESS_TIME);
+    roth_tracing_increment_counter(OMPI_MTL_PSM2_PROGRESS_COUNT);
 
     do {
         OPAL_THREAD_LOCK(&mtl_psm2_mq_mutex);
+        roth_tracing_start_timer(PSM2_MQ_IPEEK2_TIME);
+        roth_tracing_increment_counter(PSM2_MQ_IPEEK2_COUNT);
         err = psm2_mq_ipeek2(ompi_mtl_psm2.mq, &req, NULL);
+        roth_tracing_stop_timer(PSM2_MQ_IPEEK2_TIME);
         if (err == PSM2_MQ_INCOMPLETE) {
             OPAL_THREAD_UNLOCK(&mtl_psm2_mq_mutex);
+            roth_tracing_stop_timer(OMPI_MTL_PSM2_PROGRESS_TIME);
             return completed;
         } else if (OPAL_UNLIKELY(err != PSM2_OK)) {
             OPAL_THREAD_UNLOCK(&mtl_psm2_mq_mutex);
             goto error;
         }
 
+        roth_tracing_start_timer(PSM2_MQ_TEST2_TIME);
+        roth_tracing_increment_counter(PSM2_MQ_TEST2_COUNT);
         err = psm2_mq_test2(&req, &psm2_status);
+        roth_tracing_stop_timer(PSM2_MQ_TEST2_TIME);
         OPAL_THREAD_UNLOCK(&mtl_psm2_mq_mutex);
 
         if (OPAL_UNLIKELY (err != PSM2_OK)) {
@@ -469,5 +480,6 @@ int ompi_mtl_psm2_progress( void ) {
     opal_show_help("help-mtl-psm2.txt",
 		   "error polling network", true,
 		   psm2_error_get_string(err));
+    roth_tracing_stop_timer(OMPI_MTL_PSM2_PROGRESS_TIME);
     return OMPI_ERROR;
 }
